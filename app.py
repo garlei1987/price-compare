@@ -9,16 +9,20 @@ st.set_page_config(page_title="NZ Price Compare", page_icon="🔎", layout="wide
 st.title("🔎 Trade Me + Facebook Marketplace price compare")
 
 TM_URL = "https://api.trademe.co.nz/v1/Search/General.json"
+TM_SANDBOX_URL = "https://api.tmsandbox.co.nz/v1/Search/General.json"
 
 
 def trademe_search(query, price_min, price_max, rows):
-    key = st.secrets["TRADEME_KEY"]
-    secret = st.secrets["TRADEME_SECRET"]
+    key = st.secrets["TRADEME_KEY"].strip()
+    secret = st.secrets["TRADEME_SECRET"].strip()
+    # Optional: set TRADEME_SANDBOX = "yes" in Secrets if your keys are sandbox keys
+    sandbox = str(st.secrets.get("TRADEME_SANDBOX", "")).lower() in ("yes", "true", "1")
+    url = TM_SANDBOX_URL if sandbox else TM_URL
     headers = {
         "Authorization": (
             f'OAuth oauth_consumer_key="{key}", '
             f'oauth_signature_method="PLAINTEXT", '
-            f'oauth_signature="{secret}&"'
+            f'oauth_signature="{secret}%26"'
         )
     }
     params = {"search_string": query, "rows": rows}
@@ -26,8 +30,9 @@ def trademe_search(query, price_min, price_max, rows):
         params["price_min"] = price_min
     if price_max:
         params["price_max"] = price_max
-    r = requests.get(TM_URL, headers=headers, params=params, timeout=20)
-    r.raise_for_status()
+    r = requests.get(url, headers=headers, params=params, timeout=20)
+    if r.status_code != 200:
+        raise RuntimeError(f"HTTP {r.status_code} from Trade Me: {r.text[:300]}")
     out = []
     for item in r.json().get("List", []):
         price = item.get("BuyNowPrice") or item.get("StartPrice")
